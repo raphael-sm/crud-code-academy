@@ -1,6 +1,13 @@
 <?php
 
-const DATA_FILE = __DIR__ . '/../data/data.json';
+try {
+    $db_conn = new mysqli('database', 'root', '12062009--ra', 'projeto_crud');
+} catch (\mysqli_sql_exception $e) {
+    error_log((string) $e);
+    http_response_code(500);
+    echo json_encode(['error' => 'Database unavailable']);
+    exit;
+}
 
 $allowedOrigins = [
     'http://0.0.0.0:8080',

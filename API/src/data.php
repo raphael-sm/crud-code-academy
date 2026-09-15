@@ -2,117 +2,101 @@
 
 require_once __DIR__ . '/../config/config.php';
 
-function emptyData(): array
+function loadUser(mysqli $db_conn, int $id): array
 {
-    return ['users' => [], 'nextId' => 1];
+    $stmt = $db_conn->prepare("SELECT id, name, age, email FROM users WHERE id = ?");
+    $stmt->bind_param("i", $id);
+    $stmt->execute();
+
+    $result = $stmt->get_result();
+    $user = $result->fetch_assoc();
+
+    $stmt->close();
+
+    return $user ?: null;
 }
 
-function loadData(): array
+
+function loadAll()
 {
-    if (!is_file(DATA_FILE)) {
-        return emptyData();
-    }
+    global $db_conn;
 
-    $content = file_get_contents(DATA_FILE);
+    $result = $db_conn->query("SELECT * FROM users");
+    $array = $result->fetch_all(MYSQLI_ASSOC);
 
-    if ($content === false) {
-        return emptyData();
-    }
-
-    $data = json_decode($content, true);
-
-    if (!is_array($data) || !isset($data['users'], $data['nextId'])) {
-        return emptyData();
-    }
-
-    return $data;
-}
-
-function saveData(array $data): void
-{
-    file_put_contents(DATA_FILE, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
-}
-
-/**
- * Serializa um ciclo ler → alterar → gravar.
- *
- * Sem isso, duas requisições simultâneas leem o mesmo estado e a segunda
- * gravação apaga a primeira. O flock faz a segunda requisição esperar.
- */
-function withDataLock(callable $operation): mixed
-{
-    // 'c' cria o arquivo se não existir e não apaga o conteúdo.
-    $lock = fopen(DATA_FILE, 'c');
-
-    if ($lock === false) {
-        throw new RuntimeException('Could not open the data file');
-    }
-
-    try {
-        if (!flock($lock, LOCK_EX)) {
-            throw new RuntimeException('Could not lock the data file');
-        }
-
-        return $operation();
-    } finally {
-        flock($lock, LOCK_UN);
-        fclose($lock);
-    }
+    return $array;
 }
 
 function insertUser(array $user): array
 {
-    return withDataLock(function () use ($user): array {
-        $data = loadData();
+    global $db_conn;
 
-        $id = $data['nextId'];
-        $data['nextId'] = $id + 1;
+    $stmt = $db_conn->prepare("INSERT INTO users(name, age, email) VALUES (?, ?, ?)");
 
-        $user['id'] = $id;
-        $data['users'][] = $user;
+    $stmt->bind_param("sis", $user['name'], $user['age'], $user['email']);
+    $stmt->execute();
 
-        saveData($data);
+    $user['id'] = $db_conn->insert_id;
 
-        return $user;
-    });
+    $stmt->close();
+
+    return $user;
 }
 
 function updateUser(int $id, array $fields): ?array
 {
-    return withDataLock(function () use ($id, $fields): ?array {
-        $data = loadData();
-        $users = $data['users'];
+    global $db_conn;
 
-        for ($i = 0; $i < count($users); $i++) {
-            if ($users[$i]['id'] === $id) {
-                $data['users'][$i] = array_merge($users[$i], $fields);
-                saveData($data);
+    if (empty($fields)) {
+        return loadUser($db_conn, $id);
+    }
 
-                return $data['users'][$i];
-            }
+    $setParts = [];
+    $types = "";
+    $values = [];
+
+    $allowedFields = ['name', 'age', 'email'];
+
+    foreach ($allowedFields as $field) {
+        if (array_key_exists($field, $fields)) {
+            $setParts[] = "$field = ?";
+            $types .= ($field === 'age') ? "i" : "s";
+            $values[] = $fields[$field];
         }
+    }
 
-        return null;
-    });
+    if (empty($setParts)) {
+        return loadUser($db_conn, $id);
+    }
+
+    $values[] = $id;
+    $types .= "i";
+
+    $query = "UPDATE users SET " . implode(", ", $setParts) . " WHERE ID = ?";
+    $stmt = $db_conn->prepare($query);
+    $stmt->bind_param($types, ...$values);
+
+    $stmt->execute();
+
+    $stmt->close();
+
+    return loadUser($db_conn, $id);
 }
 
 function deleteUser(int $id): ?array
 {
-    return withDataLock(function () use ($id): ?array {
-        $data = loadData();
-        $users = $data['users'];
+    global $db_conn;
 
-        for ($i = 0; $i < count($users); $i++) {
-            if ($users[$i]['id'] === $id) {
-                $user = $users[$i];
-                array_splice($users, $i, 1);
-                $data['users'] = $users;
-                saveData($data);
+    $user = loadUser($db_conn, $id);
 
-                return $user;
-            }
-        }
-
+    if (!$user) {
         return null;
-    });
+    }
+
+    $stmt = $db_conn->prepare("DELETE FROM users WHERE id = ?");
+    $stmt->bind_param("i", $id);
+    $stmt->execute();
+    $stmt->close();
+
+    return $user;
 }

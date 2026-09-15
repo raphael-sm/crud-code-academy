@@ -1,8 +1,14 @@
 <?php
 
-require_once __DIR__ . '/../config/config.php';
-
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+$allowedOrigins = [
+    'http://0.0.0.0:8080',
+    'http://localhost:8080',
+    'http://127.0.0.1:8080',
+    'http://0.0.0.0:5500',
+    'http://localhost:5500',
+    'http://127.0.0.1:5500',
+];
 
 in_array($origin, $allowedOrigins) ?
     header("Access-Control-Allow-Origin: $origin") : null;
@@ -15,8 +21,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-$uri = strtok($_SERVER['REQUEST_URI'], '?');
+require_once __DIR__ . '/../config/config.php';
 
+$uri = strtok($_SERVER['REQUEST_URI'], '?');
 match ($uri) {
     '/api/users' => require __DIR__ . '/../src/api.php',
     default => notFound(),

@@ -5,9 +5,6 @@ WORKDIR /app
 COPY config/ config/
 COPY public/ public/
 COPY src/ src/
-COPY data/ data/
-
-RUN chmod -R 777 data/
 
 EXPOSE 80
 

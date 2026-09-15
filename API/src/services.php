@@ -5,7 +5,7 @@ require_once __DIR__ . '/data.php';
 
 function getAllUsers(): array
 {
-    $data = loadData();
+    $data = loadAll();
 
     return ['data' => ['users' => $data['users']], 'status' => 200];
 }
