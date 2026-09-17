@@ -21,10 +21,10 @@ function loadAll()
 {
     global $db_conn;
 
-    $result = $db_conn->query("SELECT * FROM users");
+    $result = $db_conn->query("SELECT id, name, age, email FROM users");
     $array = $result->fetch_all(MYSQLI_ASSOC);
 
-    return $array;
+    return ['users' => $array];
 }
 
 function insertUser(array $user): array
